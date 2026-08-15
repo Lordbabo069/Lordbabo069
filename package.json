@@ -1,0 +1,23 @@
+{
+  "name": "lordbabo069",
+  "version": "1.0.0",
+  "description": "- 👋 Hi, I’m @Lordbabo069 - 👀 I’m interested in medical, nurse, investemtn, bitcoin, freedom of speech and think - 🌱 I’m currently learning medical, trading, humaniti - 💞️ I’m looking to collaborate on everythink - 📫 How to reach me mail or github - 😄 Pronouns: only 2 gender - im a man! - ⚡ Fun fact: :)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lordbabo069/Lordbabo069.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Lordbabo069/Lordbabo069/issues"
+  },
+  "homepage": "https://github.com/Lordbabo069/Lordbabo069#readme",
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

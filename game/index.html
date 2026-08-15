@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terra Incognita</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%23223'/></svg>">
+<style>
+  html, body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100%; }
+  canvas { display: block; }
+  #title {
+    position: fixed; top: 38%; left: 0; right: 0;
+    text-align: center; color: #cfc8b8; pointer-events: none;
+    font: 300 34px/1.2 Georgia, serif; letter-spacing: 14px;
+    text-shadow: 0 0 24px rgba(200,190,150,0.35);
+    opacity: 1; transition: opacity 0.4s;
+  }
+  #hint {
+    position: fixed; bottom: 26px; left: 0; right: 0;
+    text-align: center; color: #9a9484; pointer-events: none;
+    font: 12px/1.4 Georgia, serif; letter-spacing: 4px;
+    opacity: 0.55;
+  }
+  #journal {
+    position: fixed; top: 24px; right: 24px; width: 270px; max-height: 78vh;
+    overflow-y: auto; display: none;
+    background: rgba(16, 13, 9, 0.92);
+    border: 1px solid rgba(190, 170, 120, 0.25);
+    border-radius: 3px;
+    color: #cfc4a6; padding: 16px 18px;
+    font: 13px/1.55 Georgia, serif;
+    box-shadow: 0 6px 40px rgba(0,0,0,0.6);
+  }
+  #journal .jtitle { font-size: 14px; letter-spacing: 2px; color: #e2d6b0; margin-bottom: 10px; border-bottom: 1px solid rgba(190,170,120,0.2); padding-bottom: 8px; }
+  #journal .jsec { margin: 12px 0 4px; font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: #8d8468; }
+  #journal .jlaw { color: #e8c96a; margin: 3px 0; }
+  #journal .jobs { color: #b3a98d; margin: 2px 0; font-style: italic; }
+  #journal .jgrid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  #journal .jcell { text-align: center; font-size: 10px; color: #a89e82; width: 56px; }
+  #journal .jcell canvas { display: block; margin: 0 auto 2px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="title"></div>
+<div id="hint">W&thinsp;A&thinsp;S&thinsp;D&ensp;·&ensp;E — berühren&ensp;·&ensp;TAB — Journal</div>
+<div id="journal"></div>
+<script src="js/core.js"></script>
+<script src="js/worldgen.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/player.js"></script>
+<script src="js/journal.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/atmosphere.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
