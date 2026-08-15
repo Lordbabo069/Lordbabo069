@@ -48,8 +48,8 @@ window.TI = window.TI || {};
     for (let i = 0; i < 90; i++) {
       const x = fr() * 512, y = fr() * 512, r = 40 + fr() * 90;
       const g = fc.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, TI.hsl(P.fogHue, 30, 60, 0.05 + fr() * 0.05));
-      g.addColorStop(1, TI.hsl(P.fogHue, 30, 60, 0));
+      g.addColorStop(0, TI.hsl(P.fogHue, 30, 42, 0.05 + fr() * 0.05));
+      g.addColorStop(1, TI.hsl(P.fogHue, 30, 42, 0));
       fc.fillStyle = g;
       fc.beginPath(); fc.arc(x, y, r, 0, TI.TAU); fc.fill();
     }
@@ -89,7 +89,7 @@ window.TI = window.TI || {};
     }
   };
 
-  function drawFlora(ctx, state, f, sp, sx, sy) {
+  function drawFlora(ctx, state, f, sp, sx, sy, nightness) {
     const t = state.t;
     const pulse = sp.pulses ? 0.55 + 0.45 * Math.sin(t * 2.6 + f.ph) : 1;
     const glow = TI.clamp(pulse * (0.5 + sp.emit) + f.echo, 0, 1.6);
@@ -101,14 +101,17 @@ window.TI = window.TI || {};
     if (sp.emit > 0 || f.lit || f.echo > 0 || sp.pulses) {
       const r = size * (2.2 + glow);
       const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-      g.addColorStop(0, TI.hsl(hue, 70, 55, 0.16 * glow + (f.lit ? 0.2 : 0)));
+      const baseA = (sp.emit > 0 && !f.lit && !sp.pulses) ? 0.08 : 0.16;
+      g.addColorStop(0, TI.hsl(hue, 70, 55, baseA * glow + (f.lit ? 0.2 : 0)));
       g.addColorStop(1, TI.hsl(hue, 70, 55, 0));
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(sx, sy, r, 0, TI.TAU); ctx.fill();
     }
 
-    ctx.strokeStyle = TI.hsl(hue, 45, 30 + 25 * pulse, 0.9);
-    ctx.fillStyle = TI.hsl(hue, 55, 34 + 30 * pulse, 0.92);
+    // Nicht-leuchtende Flora fällt nachts zur Silhouette ab
+    const sil = (sp.emit === 0 && !f.lit && !sp.pulses) ? 1 - 0.7 * nightness : 1;
+    ctx.strokeStyle = TI.hsl(hue, 45, (30 + 25 * pulse) * sil, 0.9);
+    ctx.fillStyle = TI.hsl(hue, 55, (34 + 30 * pulse) * sil, 0.92);
     ctx.lineWidth = 1.6;
 
     if (sp.shape === 'orb') {
@@ -149,24 +152,26 @@ window.TI = window.TI || {};
     const t = state.t;
     const near = TI.dist(state.player.x, state.player.y, m.x, m.y);
     const wake = TI.clamp(1 - near / 260, 0, 1) + m.seenT;
+    // Maßstab: Monolithen überragen den Spieler (~14px) um ein Vielfaches — groß, unerreichbar
+    const mh = 100 + (m.glyph % 4) * 18;
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath(); ctx.ellipse(sx, sy + 4, 16, 5, 0, 0, TI.TAU); ctx.fill();
-    const g = ctx.createLinearGradient(sx, sy - 64, sx, sy);
+    ctx.beginPath(); ctx.ellipse(sx, sy + 5, 26, 8, 0, 0, TI.TAU); ctx.fill();
+    const g = ctx.createLinearGradient(sx, sy - mh - 2, sx, sy);
     g.addColorStop(0, TI.hsl(state.world.palette.baseHue, 12, 10));
     g.addColorStop(1, TI.hsl(state.world.palette.baseHue, 14, 5));
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.moveTo(sx - 9, sy);
-    ctx.lineTo(sx - 6, sy - 62);
-    ctx.lineTo(sx + 7, sy - 58);
-    ctx.lineTo(sx + 10, sy);
+    ctx.moveTo(sx - 14, sy);
+    ctx.lineTo(sx - 10, sy - mh);
+    ctx.lineTo(sx + 11, sy - mh + 6);
+    ctx.lineTo(sx + 16, sy);
     ctx.closePath();
     ctx.fill();
     if (wake > 0.05) {
       const a = (0.25 + 0.2 * Math.sin(t * 1.4)) * TI.clamp(wake, 0, 1);
       ctx.strokeStyle = TI.hsl(state.world.palette.hueB, 70, 65, a);
       ctx.lineWidth = 1.2;
-      const gy = sy - 44 + (m.glyph % 3) * 8;
+      const gy = sy - mh * 0.72 + (m.glyph % 3) * 10;
       ctx.beginPath();
       if (m.glyph % 2) { ctx.arc(sx, gy, 5, 0, TI.TAU); }
       else { ctx.moveTo(sx - 4, gy - 4); ctx.lineTo(sx + 4, gy + 4); ctx.moveTo(sx + 4, gy - 4); ctx.lineTo(sx - 4, gy + 4); }
@@ -179,7 +184,8 @@ window.TI = window.TI || {};
     const w = state.world, p = state.player;
     const camX = state.camX - W / 2, camY = state.camY - H / 2;
     const nightness = TI.nightness(state.tod);
-    const dark = TI.lerp(w.palette.dayDark, w.palette.nightDark, nightness);
+    // Nachts schließt die Dunkelheit wirklich (Boden >= 0.88), per-Seed-Divergenz über nightDark bleibt
+    const dark = TI.lerp(w.palette.dayDark, TI.lerp(0.88, 0.97, (w.palette.nightDark - 0.6) / 0.25), Math.pow(nightness, 1.4));
     const t = state.t;
 
     ctx.fillStyle = TI.hsl(w.palette.baseHue, 30, 2.5);
@@ -192,7 +198,7 @@ window.TI = window.TI || {};
 
     // Lichtquellen sammeln
     state.lights.length = 0;
-    if (p.dead <= 0) state.lights.push({ x: p.x, y: p.y, r: 100 + p.focus * 75, hue: w.palette.baseHue, int: 0.95 });
+    if (p.dead <= 0) state.lights.push({ x: p.x, y: p.y, r: 140 + p.focus * 75, hue: w.palette.baseHue, int: 0.95, isPlayer: true });
     state.lights.push({ x: w.shrine.x, y: w.shrine.y, r: 130, hue: w.palette.hueB, int: 0.8 });
     if (state.surgeT > 0) state.lights.push({ x: state.surgeX, y: state.surgeY, r: 340 * TI.clamp(state.surgeT / 2, 0, 1), hue: w.palette.hueB, int: 0.9 });
 
@@ -227,11 +233,21 @@ window.TI = window.TI || {};
       const sx = f.x - camX, sy = f.y - camY;
       if (sx < -70 || sy < -70 || sx > W + 70 || sy > H + 70) continue;
       const sp = w.species[f.s];
-      drawFlora(ctx, state, f, sp, sx, sy);
+      drawFlora(ctx, state, f, sp, sx, sy, nightness);
       f.echo = Math.max(0, f.echo - state.dt * 0.7);
-      if (f.lit) state.lights.push({ x: f.x, y: f.y, r: 150, hue: sp.hue, int: 0.85 });
-      else if (sp.emit > 0) state.lights.push({ x: f.x, y: f.y, r: 62, hue: sp.hue, int: 0.5 });
+      if (f.lit) state.lights.push({ x: f.x, y: f.y, r: 70, hue: sp.hue, int: 0.45 }); // Biolumineszenz-Wegweiser, kein Flutlicht
+      else if (sp.emit > 0 && nightness < 0.35) state.lights.push({ x: f.x, y: f.y, r: 62, hue: sp.hue, int: 0.5 });
       else if (f.echo > 0.05) state.lights.push({ x: f.x, y: f.y, r: 70 * f.echo, hue: sp.hue, int: 0.5 * f.echo });
+    }
+
+    // Nacht-Lichtbudget: nachts dominiert das Spielerlicht — nur die 3 stärksten
+    // Nicht-Spieler-Lichter behalten Kraft, der Rest wird zum fernen Glimmen gedimmt.
+    if (nightness > 0.5) {
+      const others = state.lights.filter(L => !L.isPlayer).sort((a, b) => b.int - a.int);
+      for (let i = 3; i < others.length; i++) {
+        others[i].int = Math.min(others[i].int, 0.35);
+        others[i].r = Math.min(others[i].r, 60);
+      }
     }
 
     TI.drawCreatures(ctx, state, camX, camY, W, H);
@@ -259,7 +275,8 @@ window.TI = window.TI || {};
     ctx.restore();
 
     // Nebel — zwei driftende Schichten
-    const fd = w.palette.fogDensity * (0.55 + 0.45 * nightness);
+    // Nebel gehört dem Tag/der Dämmerung — nachts frisst die Dunkelheit ihn
+    const fd = w.palette.fogDensity * (0.9 - 0.8 * nightness);
     for (let layer = 0; layer < 2; layer++) {
       const sc = 1.4 + layer * 0.9;
       const ox = ((t * (6 + layer * 5) + camX * (0.12 + layer * 0.1)) % 512 + 512) % 512;
@@ -281,7 +298,8 @@ window.TI = window.TI || {};
     const lc = state.lightCanvas.getContext('2d');
     lc.globalCompositeOperation = 'source-over';
     lc.clearRect(0, 0, W, H);
-    lc.fillStyle = TI.hsl(w.palette.baseHue, 45, 3, dark);
+    // Nacht != Tag: die Dunkelschicht driftet nachts zum seed-eigenen Zweitton (hueB)
+    lc.fillStyle = TI.hsl(TI.lerp(w.palette.baseHue, w.palette.hueB, nightness * 0.6), 45, 1.5, dark);
     lc.fillRect(0, 0, W, H);
     lc.globalCompositeOperation = 'destination-out';
     for (const L of state.lights) {
@@ -290,7 +308,7 @@ window.TI = window.TI || {};
       const flick = 1 + Math.sin(t * 8 + L.x) * 0.035;
       const g = lc.createRadialGradient(lx, ly, 0, lx, ly, L.r * flick);
       g.addColorStop(0, 'rgba(0,0,0,' + (0.92 * L.int) + ')');
-      g.addColorStop(0.55, 'rgba(0,0,0,' + (0.45 * L.int) + ')');
+      g.addColorStop(0.4, 'rgba(0,0,0,' + (0.35 * L.int) + ')');
       g.addColorStop(1, 'rgba(0,0,0,0)');
       lc.fillStyle = g;
       lc.beginPath(); lc.arc(lx, ly, L.r * flick, 0, TI.TAU); lc.fill();
@@ -301,11 +319,12 @@ window.TI = window.TI || {};
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const L of state.lights) {
+      if (L.int < 0.7) continue; // nur dominante Lichter blühen
       const lx = L.x - camX, ly = L.y - camY;
       if (lx < -L.r || ly < -L.r || lx > W + L.r || ly > H + L.r) continue;
       const r = L.r * 0.75;
       const g = ctx.createRadialGradient(lx, ly, 0, lx, ly, r);
-      g.addColorStop(0, TI.hsl(L.hue, 70, 58, 0.10 * L.int));
+      g.addColorStop(0, TI.hsl(L.hue, 70, 58, 0.14 * L.int));
       g.addColorStop(1, TI.hsl(L.hue, 70, 58, 0));
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(lx, ly, r, 0, TI.TAU); ctx.fill();
