@@ -52,6 +52,33 @@ window.TI = window.TI || {};
     const lfoG = ctx.createGain(); lfoG.gain.value = 4;
     lfo.connect(lfoG); lfoG.connect(o2.detune);
     o1.connect(lp); o2.connect(lp);
+    // Langsame Stimmführung: o2 ist keine eingefrorene Quinte mehr, sondern pendelt
+    // alle 20–40 s (Rate pro Seed) zwischen 2–3 Skalen-Graden um die Quinte —
+    // Harmonie aus der Welt-Tonalität, die sich über Minuten bewegt. Nie weiter
+    // als die Nachbargrade: Kohärenz vor Zufall.
+    const sc = world.music.scale;
+    let fifthI = sc.indexOf(7);
+    if (fifthI < 0) { fifthI = 0; for (let i = 1; i < sc.length; i++) if (Math.abs(sc[i] - 7) < Math.abs(sc[fifthI] - 7)) fifthI = i; }
+    const pend = [
+      sc[Math.max(0, fifthI - 1)],
+      sc[fifthI],
+      fifthI + 1 < sc.length ? sc[fifthI + 1] : sc[0] + 12
+    ];
+    const detuneK = (0.751 * 2) / Math.pow(2, 7 / 12); // seed-typische Schwebung gegen o1 bleibt
+    let inverted = false;                              // nightInverts: nachts gespiegelte Stimme
+    let pendSt = pend[1];
+    function o2Freq(st) {
+      // Gespiegelt = Intervall-Umkehrung um o1: die Quinte wird zur dunkleren Quarte.
+      const s2 = inverted ? 12 - st : st;
+      return (root / 2) * Math.pow(2, s2 / 12) * detuneK;
+    }
+    let vlStep = 0;
+    const vlWalk = [1, 2, 1, 0]; // Quinte -> oben -> Quinte -> unten, Pendel statt Würfel
+    setInterval(function () {
+      vlStep = (vlStep + 1) % vlWalk.length;
+      pendSt = pend[vlWalk[vlStep]];
+      o2.frequency.setTargetAtTime(o2Freq(pendSt), ctx.currentTime, 4);
+    }, (20 + rootN * 20) * 1000);
     // Atem des Drones: sehr langsamer Schwell (Periode 45–90 s, Rate pro Seed),
     // das Bett verschwindet fast und kehrt wieder — Tiefendröhnen statt Dauerton.
     const breath = ctx.createOscillator();
@@ -110,6 +137,17 @@ window.TI = window.TI || {};
       nightG.gain.setTargetAtTime(n * 0.05, t, 0.7);
       lp.frequency.setTargetAtTime(lpBase * (1 - 0.45 * n), t, 0.7);
       wg.gain.setTargetAtTime(0.04 * (1 - 0.5 * n), t, 0.7);
+      // nightInverts hörbar: die Zwillinge tauschen die Plätze auch im Klang —
+      // beim Überschreiten von n>0.5 gleitet o2 auf den gespiegelten, dunkleren
+      // Grad (tc 3 s), bei Tag zurück. Welten ohne dieses Gesetz behalten die
+      // reine Vertiefung — Gesetze bleiben divergent.
+      if (world.laws && world.laws.nightInverts) {
+        const nowInv = n > 0.5;
+        if (nowInv !== inverted) {
+          inverted = nowInv;
+          o2.frequency.setTargetAtTime(o2Freq(pendSt), t, 3);
+        }
+      }
     }, 250);
 
     // Send-Bus: Feedback-Delay mit Tiefpass in der Schleife — der Raum der Leere.
@@ -126,19 +164,50 @@ window.TI = window.TI || {};
     dly.connect(dlp); dlp.connect(fb); fb.connect(dly);
     dlp.connect(master);
     TI.sound.noteBus = noteBus;
+
+    // Blüh-Bus für Erkenntnis-Momente: wie noteBus, aber mit zusätzlichem Send
+    // in den Delay-Raum (0.25 + 0.15 ≈ 0.4) — 'discovery'/'kindle' blühen nach
+    // wie das Lagerfeuer-Thema, statt als trockener Sinus zu enden.
+    const bloom = ctx.createGain(); bloom.gain.value = 1;
+    bloom.connect(noteBus);
+    const bloomSend = ctx.createGain(); bloomSend.gain.value = 0.15;
+    bloom.connect(bloomSend); bloomSend.connect(dly);
+    TI.sound.bloomBus = bloom;
+
+    // Glints: seltene, einzelne Skalen-Noten 2–3 Oktaven über dem Drone-Grund —
+    // die Fernenebene über dem Wind (Grand-Reef-Spektrum). Weich (Attack 0.4 s),
+    // leise, weit gepannt, durch den noteBus, damit sie im Delay-Raum verblühen.
+    // Nachts häufiger, tags seltener; Grundintervall pro Seed aus rootN.
+    function scheduleGlint() {
+      const n = (TI.debug && TI.debug.state && TI.nightness) ? TI.nightness(TI.debug.state.tod) : 0;
+      const iv = (20 + rootN * 20) * (1.7 - n); // Tag ~34–68 s, Nacht ~14–28 s
+      setTimeout(function () {
+        if (TI.sound.on && !(TI.sound.holdCalls && ctx.currentTime < TI.sound.holdCalls)) {
+          const nSc = world.music.scale.length;
+          const deg = nSc * (1 + ((Math.random() * 2) | 0)) + ((Math.random() * nSc) | 0);
+          const pan = (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.3);
+          TI.note(deg, 2.5 + Math.random() * 1.5, 0, 0.015 + Math.random() * 0.015, 'sine', pan, 0.4);
+        }
+        scheduleGlint();
+      }, iv * 1000);
+    }
+    scheduleGlint();
   };
 
-  // Bett um einen großen Moment herum ducken: schnell weg, kurz halten, langsam zurück.
+  // Bett um einen großen Moment herum ducken: schnell weg, halten, zurück.
   // Stille rahmt den Moment — die Lagerfeuer-Ruhe vor dem Signal.
-  function duckBed(when) {
+  // floor/holdDur/releaseDur formen die Stille: 'discovery' kurz und warm,
+  // 'monolith' echtes Nichts mit langem Atem zurück.
+  function duckBed(when, floor, holdDur, releaseDur) {
     const bed = TI.sound.bed;
     if (!bed) return;
     const t = TI.sound.ctx.currentTime + (when || 0);
+    const f = floor || 0.05, h = holdDur || 1.2, r = releaseDur || 3;
     bed.gain.cancelScheduledValues(t);
     bed.gain.setValueAtTime(bed.gain.value, t);
-    bed.gain.linearRampToValueAtTime(0.05, t + 0.1);
-    bed.gain.setValueAtTime(0.05, t + 1.3);
-    bed.gain.linearRampToValueAtTime(1, t + 4.3);
+    bed.gain.linearRampToValueAtTime(f, t + 0.1);
+    bed.gain.setValueAtTime(f, t + 0.1 + h);
+    bed.gain.linearRampToValueAtTime(1, t + 0.1 + h + r);
   }
 
   function freqOf(deg) {
@@ -166,8 +235,21 @@ window.TI = window.TI || {};
       pn.pan.value = TI.clamp(pan, -1, 1);
       g.connect(pn); out = pn;
     }
-    o.connect(g); out.connect(dest || TI.sound.noteBus || TI.sound.master);
+    o.connect(g);
+    // Wärme statt Piepsen: Sinustöne bekommen einen zweiten, +7 Cent verstimmten
+    // Oszillator bei halber Lautstärke — langsame Schwebung statt trockener Sinus.
+    let ow = null;
+    if ((type || 'sine') === 'sine') {
+      ow = ctx.createOscillator();
+      ow.type = 'sine';
+      ow.frequency.value = o.frequency.value;
+      ow.detune.value = 7;
+      const gw = ctx.createGain(); gw.gain.value = 0.5;
+      ow.connect(gw); gw.connect(g);
+    }
+    out.connect(dest || TI.sound.noteBus || TI.sound.master);
     o.start(t0); o.stop(t0 + D + 0.1);
+    if (ow) { ow.start(t0); ow.stop(t0 + D + 0.1); }
   };
 
   // Schläge sind der Welt-Tonalität entnommen: Start als Verhältnis zur Wurzel,
@@ -187,44 +269,69 @@ window.TI = window.TI || {};
     o.start(t0); o.stop(t0 + 0.4);
   }
 
+  // Das 2-Ton-Rufmotiv der Welt: eine Stimme, kein Zufall — festes Motiv pro Seed.
+  // Ein dunkler Ruf ist ein ferner Ruf: Per-Call-Tiefpass, Lautstärke folgt dem Cutoff
+  // beim Aufrufer. Respektiert holdCalls (Stille um große Momente).
+  function callMotif(when, vol, pan, cutoff) {
+    const s = TI.sound;
+    if (!s.on) return;
+    const ctx = s.ctx;
+    if (s.holdCalls && ctx.currentTime + (when || 0) < s.holdCalls) return;
+    const deg1 = 5 + ((s.rootN * 3) | 0);
+    const deg2 = deg1 + (s.bright >= 0.5 ? 2 : 1);
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass'; flt.frequency.value = cutoff; flt.Q.value = 0.5;
+    flt.connect(s.noteBus || s.master);
+    TI.note(deg1, 0.8, when || 0, vol, 'sine', pan, 0.06, flt);
+    TI.note(deg2, 1.3, (when || 0) + 0.5, vol * 0.85, 'sine', pan, 0.06, flt);
+  }
+
   TI.sfx = function (name, opt) {
     if (!TI.sound.on) return;
     opt = opt || {};
     switch (name) {
-      case 'touch': TI.note(1 + ((Math.random() * 3) | 0), 0.35, 0, 0.09, 'triangle'); break;
+      case 'touch': {
+        TI.note(1 + ((Math.random() * 3) | 0), 0.35, 0, 0.09, 'triangle');
+        // touchEchoes telegraphieren: die Welt antwortet — nach 1.2–2 s kommt
+        // dasselbe Rufmotiv leise, dumpf und weit von der Seite zurück.
+        // Gesetz als Klang, ohne Text; Welten ohne das Gesetz bleiben stumm.
+        const w = TI.sound.world;
+        if (w && w.laws && w.laws.touchEchoes) {
+          const side = (Math.random() < 0.5 ? -1 : 1) * 0.85;
+          callMotif(1.2 + Math.random() * 0.8, 0.03, side, 500);
+        }
+        break;
+      }
       case 'heal': TI.note(0, 0.5, 0, 0.1); TI.note(2, 0.6, 0.09, 0.09); break;
       case 'hurt': thud(0.32, 0.8); break;
       case 'maul': thud(0.45, 0.55); TI.note(-3, 0.4, 0.02, 0.1, 'sawtooth'); break;
-      case 'kindle': TI.note(4, 1.4, 0, 0.07); TI.note(7, 1.8, 0.12, 0.05); break;
+      case 'kindle':
+        TI.note(4, 1.4, 0, 0.07, 'sine', 0, 0, TI.sound.bloomBus);
+        TI.note(7, 1.8, 0.12, 0.05, 'sine', 0, 0, TI.sound.bloomBus);
+        break;
       case 'surge': for (let i = 0; i < 5; i++) TI.note(i * 2, 0.9, i * 0.07, 0.06); break;
       case 'discovery':
         // Stille rahmt die Erkenntnis: das Bett fällt weg, ein Atemzug Nichts,
         // erst dann der erste Ton. Danach schweigen die Rufe eine Weile.
         duckBed(0);
         TI.sound.holdCalls = TI.sound.ctx.currentTime + 8;
-        TI.note(0, 0.8, 0.6, 0.13); TI.note(2, 0.8, 0.76, 0.12); TI.note(4, 1.6, 0.92, 0.12);
-        TI.note(4 + 5, 2.2, 0.94, 0.05, 'sine', 0, 0.15);
+        // Durch den Blüh-Bus: der Erkenntnis-Moment blüht im Delay-Raum nach.
+        TI.note(0, 0.8, 0.6, 0.13, 'sine', 0, 0, TI.sound.bloomBus);
+        TI.note(2, 0.8, 0.76, 0.12, 'sine', 0, 0, TI.sound.bloomBus);
+        TI.note(4, 1.6, 0.92, 0.12, 'sine', 0, 0, TI.sound.bloomBus);
+        TI.note(4 + 5, 2.2, 0.94, 0.05, 'sine', 0, 0.15, TI.sound.bloomBus);
         break;
       case 'call': {
-        // Rufe sind eine Stimme, kein Zufall: festes 2-Ton-Motiv pro Seed.
-        // 30% bleiben aus — Stille als Mittel. Ein dunkler Ruf ist ein ferner Ruf:
-        // Per-Call-Tiefpass, Lautstärke folgt dem Cutoff.
-        const ctx = TI.sound.ctx;
-        if (TI.sound.holdCalls && ctx.currentTime < TI.sound.holdCalls) break;
+        // 30% bleiben aus — Stille als Mittel. Motiv und Ferne (Cutoff) siehe callMotif.
         if (Math.random() < 0.3) break;
-        const deg1 = 5 + ((TI.sound.rootN * 3) | 0);
-        const deg2 = deg1 + (TI.sound.bright >= 0.5 ? 2 : 1);
         const cut = 500 + Math.random() * 1100;
-        const flt = ctx.createBiquadFilter();
-        flt.type = 'lowpass'; flt.frequency.value = cut; flt.Q.value = 0.5;
-        flt.connect(TI.sound.noteBus || TI.sound.master);
-        const vol = 0.045 * (cut / 1600);
-        TI.note(deg1, 0.8, 0, vol, 'sine', opt.pan || 0, 0.06, flt);
-        TI.note(deg2, 1.3, 0.5, vol * 0.85, 'sine', opt.pan || 0, 0.06, flt);
+        callMotif(0, 0.045 * (cut / 1600), opt.pan || 0, cut);
         break;
       }
       case 'monolith':
-        duckBed(0);
+        // Echte Stille: das Bett fällt auf fast Nichts, hält 2 s den Atem an,
+        // und kehrt über 8 s zurück, während der Stein längst summt.
+        duckBed(0, 0.001, 2, 8);
         TI.sound.holdCalls = TI.sound.ctx.currentTime + 8;
         // Der Stein schwillt an und summt — kein Anschlag.
         TI.note(-7, 3.5, 0, 0.14, 'sine', 0, 1.1);
