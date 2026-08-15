@@ -23,9 +23,27 @@ window.TI = window.TI || {};
       const p = place(260);
       list.push({ kind: 'watcher', x: p.x, y: p.y, vx: 0, vy: 0, a: rng() * TI.TAU, ph: rng() * TI.TAU, size: 8 + rng() * 4, shy: 0.5 + rng() * 0.5, observed: 0 });
     }
+    const baseA = rng() * TI.TAU;
     for (let i = 0; i < spec.stalkers; i++) {
-      const p = place(700);
-      list.push({ kind: 'stalker', x: p.x, y: p.y, vx: 0, vy: 0, a: rng() * TI.TAU, ph: rng() * TI.TAU, size: 11 + rng() * 5, aggro: 0, cool: 0, observed: 0, trail: [], shadow: 0, orbitDir: rng() < 0.5 ? -1 : 1, committed: false, scan: 0 });
+      // Die ersten beiden Jäger sind Wächter: sie stehen von Anfang an AUF dem
+      // Ring um den Schrein, 90° versetzt — geometrisch ist damit in jedem
+      // Standbild am Spawn mindestens einer im 1280×720-Ausschnitt.
+      let p = null, warden = false, terrA = 0;
+      if (i < 2 && spec.wardenR) {
+        terrA = baseA + i * Math.PI;
+        for (let k = 0; k < 48; k++) {
+          const a = terrA + k * 0.13;
+          const x = world.shrine.x + Math.cos(a) * spec.wardenR;
+          const y = world.shrine.y + Math.sin(a) * spec.wardenR;
+          // Nur Ringpunkte, an denen der GANZE Körper mit Leerraum im 1280×720-Frame
+          // steht (vertikal ±285 px um den Schrein) — die Silhouette darf im Standbild
+          // nie am Bildrand angeschnitten sein.
+          if (Math.abs(Math.sin(a)) * spec.wardenR > 285) continue;
+          if (world.elevAt(x, y) > world.GROUND + 0.01) { p = { x, y }; terrA = a; warden = true; break; }
+        }
+      }
+      if (!p) p = place(700);
+      list.push({ kind: 'stalker', x: p.x, y: p.y, vx: 0, vy: 0, a: rng() * TI.TAU, ph: rng() * TI.TAU, size: 11 + rng() * 5, aggro: 0, cool: 0, observed: 0, trail: [], shadow: 0, orbitDir: rng() < 0.5 ? -1 : 1, committed: false, scan: 0, warden, terrA });
     }
     return list;
   };
@@ -42,13 +60,31 @@ window.TI = window.TI || {};
 
   TI.updateCreatures = function (state, dt) {
     const w = state.world, p = state.player;
-    const night = TI.nightness(state.tod) > 0.55;
+    const nn = TI.nightness(state.tod);
+    const night = nn > 0.55;
+    const dusk = nn > 0.35; // Dämmerung: die Schrein-Anziehung des Jägers greift schon hier
     for (const c of state.creatures) {
       let tx = 0, ty = 0, speed = 0;
 
       if (c.kind === 'drifter') {
         c.a += Math.sin(state.t * 0.3 + c.ph) * 0.02 + (Math.random() - 0.5) * 0.08;
         tx = Math.cos(c.a); ty = Math.sin(c.a); speed = 17;
+        // Bewegungsidiom am faunaProfile: im 'swarm'-Profil schwache Kohäsion zu
+        // Artgenossen im Radius 200 — Drifter ballen sich zu Wolken, Fauna-Präsenz
+        // füllt das Bild. 'wary'/'hollow' wandern solitär wie bisher.
+        if (w.creatureSpec.profile === 'swarm') {
+          let cx = 0, cy = 0, n = 0;
+          for (const o of state.creatures) {
+            if (o === c || o.kind !== 'drifter') continue;
+            if (TI.dist(o.x, o.y, c.x, c.y) < 200) { cx += o.x; cy += o.y; n++; }
+          }
+          if (n) {
+            const gx = cx / n - c.x, gy = cy / n - c.y, gl = Math.hypot(gx, gy) || 1;
+            tx = tx * 0.75 + gx / gl * 0.25;
+            ty = ty * 0.75 + gy / gl * 0.25;
+            const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+          }
+        }
         if (w.laws.lightDraws) {
           const b = nearestLitBeacon(w, c.x, c.y, 480);
           if (b) {
@@ -82,7 +118,9 @@ window.TI = window.TI || {};
         c.cool = Math.max(0, c.cool - dt);
         c.aggro = Math.max(0, c.aggro - dt * 0.05);
         const d = TI.dist(c.x, c.y, p.x, p.y);
-        const hunting = (night || c.aggro > 0) && d < 560 && c.cool <= 0;
+        // Wächter jagen nur, wenn der Spieler in ihr Territorium eindringt (d < 280) —
+        // am Schrein selbst ist ihre ferne Silhouette Drohung, nie sofortiger Angriff.
+        const hunting = (night || c.aggro > 0) && d < (c.warden ? 280 : 560) && c.cool <= 0;
         const playerStill = w.laws.stillnessHides && p.still > 1.2 && c.aggro <= 0;
         // Licht-Gesetz: vertreibt Licht, halten brennende Leuchten den Jäger fern
         let repelled = false;
@@ -130,12 +168,25 @@ window.TI = window.TI || {};
             c.scan -= dt;
             tx = 0; ty = 0; speed = 0;
             c.a += Math.sin(state.t * 3) * dt * 2;
+          } else if (c.warden) {
+            // Territorium statt Zufalls-Wanderung: der Wächter zieht dauerhaft seinen
+            // Ring um den Schrein — die ferne Silhouette steht schon im ersten
+            // Dusk-/Nacht-Standbild am Nebelrand, Tag und Nacht, jede Welt.
+            const R = w.creatureSpec.wardenR, dir = w.creatureSpec.wardenDir;
+            const gx0 = w.shrine.x + Math.cos(c.terrA) * R, gy0 = w.shrine.y + Math.sin(c.terrA) * R;
+            // Nach einer Jagd (oder wenn Gelände blockierte) auf den nächsten Ringpunkt aufsetzen
+            if (TI.dist(c.x, c.y, gx0, gy0) > 260) c.terrA = Math.atan2(c.y - w.shrine.y, c.x - w.shrine.x) + dir * 0.12;
+            c.terrA += dir * (30 / R) * dt;
+            const gx = w.shrine.x + Math.cos(c.terrA) * R, gy = w.shrine.y + Math.sin(c.terrA) * R;
+            const gd = TI.dist(c.x, c.y, gx, gy) || 1;
+            tx = (gx - c.x) / gd; ty = (gy - c.y) / gd;
+            speed = TI.clamp(gd * 0.6, 24, 64);
           } else {
             c.a += (Math.random() - 0.5) * 0.1;
-            tx = Math.cos(c.a); ty = Math.sin(c.a); speed = night ? 30 : 8;
-            // Nachts zieht es den Jäger schwach Richtung Schrein: die Silhouette
-            // taucht in der ersten Nacht am Bildrand auf, statt nie im Bild zu sein.
-            if (night) {
+            tx = Math.cos(c.a); ty = Math.sin(c.a); speed = night ? 30 : dusk ? 18 : 8;
+            // Ab der Dämmerung zieht es den Jäger schwach Richtung Schrein: die lange
+            // Silhouette taucht schon im Dusk-Still am Nebelrand auf, nachts erst recht.
+            if (dusk) {
               const sd = TI.dist(c.x, c.y, w.shrine.x, w.shrine.y);
               if (sd > 900) {
                 tx = tx * 0.7 + (w.shrine.x - c.x) / sd * 0.3;
@@ -172,7 +223,7 @@ window.TI = window.TI || {};
     const night = TI.nightness(state.tod) > 0.55;
     for (const c of state.creatures) {
       const sx = c.x - camX, sy = c.y - camY;
-      const cull = c.kind === 'stalker' ? 160 : 60; // der lange Körper ragt weiter ins Bild
+      const cull = c.kind === 'stalker' ? 260 : 60; // der lange Körper (fern vergrößert) ragt weiter ins Bild
       if (sx < -cull || sy < -cull || sx > W + cull || sy > H + cull) continue;
       const bob = Math.sin(t * 1.7 + c.ph) * 2;
 
@@ -200,19 +251,42 @@ window.TI = window.TI || {};
         ctx.fillStyle = TI.hsl(hue + 40, 80, 70, 0.9);
         ctx.beginPath(); ctx.arc(ex - 2.2, ey, 1.4, 0, TI.TAU); ctx.arc(ex + 2.2, ey, 1.4, 0, TI.TAU); ctx.fill();
       } else if (c.kind === 'stalker') {
-        const vis = night || c.aggro > 0 ? 0.85 : 0.35;
+        // Tagsüber ist der Jäger aus der FERNE eine lesbare Silhouette (vis bis ~0.5),
+        // nah am Spieler bleibt er schemenhaft (0.35) — man SIEHT die Form am Nebelrand,
+        // ohne dass die Nähe ihre Unklarheit verliert.
+        const pdist = TI.dist(c.x, c.y, state.player.x, state.player.y);
+        const vis = (night || c.aggro > 0) ? 0.85 : 0.35 + 0.15 * TI.clamp((pdist - 300) / 120, 0, 1);
         // Bei Fast-Stillstand (Scan nach gebrochener Jagd) trägt c.a das Kopfpendeln
         const ang = Math.hypot(c.vx, c.vy) > 4 ? Math.atan2(c.vy, c.vx) : c.a;
+        // FERNE liest sich als GRÖSSE (Subnautica-Reaper): mit der Distanz wächst die
+        // gezeichnete Form bis ×1.55 und der Halo verdichtet sich — die Silhouette am
+        // Nebelrand wirkt wie ein großes Tier weit draußen, nie wie ein kleines daneben.
+        const far = TI.clamp((pdist - 260) / 240, 0, 1);
+        const fsc = 1 + far * 0.55;
+
+        // Nachts trägt ein fahles Nebelglimmen den Jäger durch die Dunkelschicht: die
+        // Dunkelheit wird dünner, wo er zieht — die Form bleibt lesbar, ohne dass ein
+        // Licht im Bild 'brennt' (int unter der Bloom-Schwelle 0.7). Die Stärke folgt
+        // derselben späten Nacht-Rampe wie die Dunkelschicht selbst: in der Dämmerung
+        // kaum vorhanden, in tiefer Nacht kräftig genug gegen dark≈0.9.
+        const nnv = TI.nightness(state.tod);
+        if (nnv > 0.45) {
+          // Rampe greift schon in der Dämmerung (ab ~0.65), damit die Form auch im
+          // tod=0.5-Still als Tier lesbar bleibt; int bleibt unter der Bloom-Schwelle 0.7.
+          const deep = TI.clamp((nnv - 0.65) / 0.35, 0, 1);
+          state.lights.push({ x: c.x, y: c.y, r: (80 + c.size * 5.5) * fsc, hue: w.palette.hueB, int: 0.32 + 0.06 * far + 0.3 * deep });
+        }
 
         // Weicher dunkler Halo hinter dem Körper — macht die Form im Nebel aus der Ferne lesbar
-        const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, c.size * 4.5);
-        halo.addColorStop(0, TI.hsl(w.palette.baseHue, 25, 4, vis * 0.4));
+        const haloR = c.size * 4.5 * fsc;
+        const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, haloR);
+        halo.addColorStop(0, TI.hsl(w.palette.baseHue, 25, 4, vis * (0.4 + 0.3 * far)));
         halo.addColorStop(1, TI.hsl(w.palette.baseHue, 25, 4, 0));
         ctx.fillStyle = halo;
-        ctx.beginPath(); ctx.arc(sx, sy, c.size * 4.5, 0, TI.TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, sy, haloR, 0, TI.TAU); ctx.fill();
 
         // Gegliederter Körper: Segmente hintereinander auf dem Positions-Trail, Kopf voran
-        const SEGS = 9, gap = c.size * 7 / (SEGS - 1);
+        const SEGS = 9, gap = c.size * 7 * fsc / (SEGS - 1);
         const pts = [];
         let px = c.x, py = c.y, ti = 0, walked = 0;
         pts.push({ x: c.x, y: c.y });
@@ -246,7 +320,7 @@ window.TI = window.TI || {};
           ctx.translate(q.x - camX, q.y - camY + Math.sin(t * 1.3 + c.ph + s * 0.8) * 1.2);
           ctx.rotate(sa);
           ctx.beginPath();
-          ctx.ellipse(0, 0, c.size * (s === 0 ? 1.05 : 0.9) * taper + c.size * 0.25, c.size * 0.5 * taper + c.size * 0.1, 0, 0, TI.TAU);
+          ctx.ellipse(0, 0, (c.size * (s === 0 ? 1.05 : 0.9) * taper + c.size * 0.25) * fsc, (c.size * 0.5 * taper + c.size * 0.1) * fsc, 0, 0, TI.TAU);
           ctx.fill();
           ctx.restore();
         }

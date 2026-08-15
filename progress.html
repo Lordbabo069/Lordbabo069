@@ -1,0 +1,251 @@
+<title>Gauntlet-Log Terra Incognita</title>
+<style>
+  /* Bewusst ein-themig dunkel: die Seite lebt in der Nachtwelt des Spiels.
+     Alle Farben explizit — kein Wert erbt vom Host. */
+  :root {
+    --ground: #14110c;
+    --surface: #1d1812;
+    --surface2: #241e15;
+    --ink: #d9cdb0;
+    --muted: #8f8570;
+    --gold: #e2c46a;
+    --rust: #c08a6a;
+    --moss: #a8b070;
+    --line: rgba(190, 170, 120, 0.16);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 16px/1.65 Georgia, 'Times New Roman', serif;
+  }
+  a { color: var(--gold); }
+  a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  .hero { position: relative; overflow: hidden; }
+  .hero img { width: 100%; max-height: 66vh; object-fit: cover; display: block; filter: brightness(1.06); }
+  .hero .veil {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(20,17,12,0.15) 0%, rgba(20,17,12,0) 40%, rgba(20,17,12,0.92) 96%);
+  }
+  .hero .title {
+    position: absolute; left: 0; right: 0; bottom: 7%;
+    text-align: center;
+  }
+  .hero h1 {
+    margin: 0;
+    font-weight: 400;
+    font-size: clamp(30px, 6vw, 54px);
+    letter-spacing: 0.42em;
+    text-indent: 0.42em;
+    color: #e8dcbc;
+    text-shadow: 0 0 34px rgba(220, 200, 140, 0.35);
+  }
+  .hero .sub {
+    margin-top: 10px;
+    font-size: 12px; letter-spacing: 0.34em; text-indent: 0.34em;
+    text-transform: uppercase; color: var(--muted);
+  }
+
+  main { max-width: 920px; margin: 0 auto; padding: 0 22px 90px; }
+  section { margin-top: 74px; }
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 14px;
+  }
+  h2 {
+    font-weight: 400; font-size: 27px; margin: 0 0 18px;
+    color: #e6dab8; text-wrap: balance;
+  }
+  p { max-width: 62ch; margin: 0 0 14px; }
+  .lede { font-size: 18.5px; color: #e2d6b6; }
+  .quote {
+    border-left: 2px solid var(--rust);
+    padding: 4px 0 4px 18px; margin: 20px 0;
+    color: var(--rust); font-style: italic; max-width: 60ch;
+  }
+  .quote .who { display: block; margin-top: 8px; font-style: normal; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .quote.gold { border-color: var(--gold); color: var(--gold); }
+
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 26px 0 8px; }
+  .duo figure, .gallery figure { margin: 0; }
+  figure img { width: 100%; display: block; border-radius: 2px; }
+  figcaption { font-size: 12.5px; color: var(--muted); padding-top: 8px; font-style: italic; }
+  @media (max-width: 640px) { .duo { grid-template-columns: 1fr; } }
+
+  .board { overflow-x: auto; margin-top: 10px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 11px 16px 11px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
+  td.path { white-space: nowrap; color: var(--muted); }
+  td.path b { color: var(--ink); font-weight: 400; }
+  td .hit { color: var(--gold); }
+  .bar-note { font-size: 13px; color: var(--muted); margin-top: 10px; font-style: italic; }
+
+  .area { border-top: 1px solid var(--line); padding-top: 30px; margin-top: 34px; }
+  .area h3 { font-weight: 400; font-size: 20px; margin: 0 0 4px; color: #e6dab8; }
+  .area .score { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .area .score .hit { color: var(--gold); }
+
+  .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .gallery { grid-template-columns: 1fr; } }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 34px; margin-top: 22px; }
+  .stat .n { font-size: 30px; color: #e6dab8; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
+
+  .how { background: var(--surface); border: 1px solid var(--line); border-radius: 3px; padding: 22px 26px; margin-top: 24px; }
+  .how code { font: 13.5px/1.7 ui-monospace, 'Cascadia Code', Menlo, monospace; color: var(--moss); }
+  .how p { margin: 0 0 8px; }
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); font-style: italic; }
+</style>
+
+<div class="hero">
+  <img src="docs/shots/orun-night.jpg" alt="Terra Incognita bei Nacht: eine einzelne warme Lichtinsel um den Wanderer in fast völliger Dunkelheit, ferne Biolumineszenz am Horizont.">
+  <div class="veil"></div>
+  <div class="title">
+    <h1>TERRA INCOGNITA</h1>
+    <div class="sub">Gauntlet-Log · vier Runden gegen die Bar</div>
+  </div>
+</div>
+
+<main>
+  <section>
+    <p class="eyebrow">Das Spiel</p>
+    <h2>Eine Welt, die niemand kennt — auch das Internet nicht</h2>
+    <p class="lede">Terra Incognita ist ein Erkundungsspiel, in dem jede Welt andere Naturgesetze hat: Was pulsiert, brennt in der einen Welt und nährt in der anderen; Licht lockt hier die Jäger und vertreibt sie dort; manche Welten kehren nachts alle Wirkungen um. Nichts wird erklärt. Das Feldjournal schreibt nur auf, was du selbst gesehen hast — und wenn sich eine Vermutung zum zweiten Mal bestätigt, kristallisiert sie zu einem Gesetz.</p>
+    <p>Das Zielgefühl, an dem jede Runde gemessen wurde: <em>Ich bin der erste Mensch, der diese Welt versteht.</em></p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Die Bar</p>
+    <h2>Blind gegen Outer Wilds und Subnautica</h2>
+    <p>Jeder Kritiker startete mit frischem Kontext, machte eigene Screenshots und verglich sie blind gegen fünf konkrete Referenz-Stills: das Lagerfeuer auf Timber Hearth, den Blick in Brittle Hollows Kern, den Abstieg in die Blood-Kelp-Zone, den ersten Reaper im Nebel, den Grand Reef. Diese Bar taugt, weil beide Spiele dem Zielgefühl am nächsten kommen, unser Kernkonzept — pro Welt divergente Regeln — aber nicht besitzen: gemessen wird das Gefühl, nicht kopierbare Features. Ab 8 von 10 gilt: Ein blinder Juror könnte unser Bild dem Original vorziehen.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Runde 1 → Runde 4</p>
+    <h2>Dieselbe Nacht, vier Runden später</h2>
+    <div class="duo">
+      <figure>
+        <img src="docs/shots/v0-velt-night.jpg" alt="Version 0 bei Nacht: gleichmäßig glimmender Lichterteppich, kaum dunkler als der Tag.">
+        <figcaption>v0, Nacht: „Die Nacht existiert nicht … ein gleichmäßig glimmender Lichterteppich ohne Lichthierarchie." — Kritiker 1, Score 3/10</figcaption>
+      </figure>
+      <figure>
+        <img src="docs/shots/velt-night.jpg" alt="Finaler Stand bei Nacht: echte Dunkelheit, eine dominante warme Lichtinsel um den Spieler, wenige ferne Glimmer.">
+        <figcaption>Runde 4, dieselbe Welt, dieselbe Uhrzeit: echte Dunkelheit, ein dominantes Licht, Biolumineszenz als Orientierung.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Stand</p>
+    <h2>Score-Verlauf gegen die Bar</h2>
+    <div class="board">
+      <table>
+        <tr><th>Bereich</th><th>Verlauf</th><th>Schlussjuror</th></tr>
+        <tr>
+          <td>Bewegung &amp; Kamera</td>
+          <td class="path">5 → 7 → <b class="hit">8 ✦</b></td>
+          <td>„Ja, knapp: Die Ein-Uhr-Kohärenz von Bob, Sway, Fußfall-Kamera und Step-Sound erreicht Outer-Wilds-Handwerksniveau — nichts ruckt."</td>
+        </tr>
+        <tr>
+          <td>Klang der Leere</td>
+          <td class="path">4 → 6 → <b class="hit">8 ✦</b></td>
+          <td>„Knapp ja — das atmende, seed-divergente Bett und die dreifach eingesetzte Stille tragen das Leere-Gefühl der Referenzen."</td>
+        </tr>
+        <tr>
+          <td>Erkenntnis-Moment</td>
+          <td class="path">4 → 6 → <b class="hit">8 ✦</b></td>
+          <td>„Die Kristallisation ist warm, kurz und verdient: Stille → Motiv → Tinten-Reveal. Das Journal liest als Handschrift, nicht als UI."</td>
+        </tr>
+        <tr>
+          <td>Weltregeln &amp; Gefahr</td>
+          <td class="path">4 → 5 → 7 → <b>7.5</b></td>
+          <td>„Echtes Mysterium, Jäger vorbildlich UI-frei als Reaper-Grammatik — die Silhouette stand im Still noch angeschnitten." <span class="hit">Nach Juror-Vorgabe geschlossen.</span></td>
+        </tr>
+        <tr>
+          <td>Atmosphäre</td>
+          <td class="path">3 → 5 → 7 → <b>7</b></td>
+          <td>„Die Nächte tragen das Zielgefühl fast auf Bar-Niveau — bei Tag fehlte der Silhouette der Tonwert-Abstand." <span class="hit">Nach Juror-Vorgabe geschlossen.</span></td>
+        </tr>
+      </table>
+    </div>
+    <p class="bar-note">✦ = Bar erreicht (blinder Juror könnte unseres wählen). Die zwei letzten Restlücken waren so präzise benannt, dass der Lead sie nach Runde 4 direkt umsetzte — die Tag-Stills unten zeigen den Stand danach.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Die Runden</p>
+    <h2>Was die Kritiker sahen — und was daraus wurde</h2>
+
+    <div class="area">
+      <h3>Atmosphäre</h3>
+      <div class="score">3 → 5 → 7 → 7 + Lead-Politur</div>
+      <div class="quote">„Jede emittierende Pflanze stanzt ein Loch in die Dunkelschicht, und der milchige Nebel wird nachts sogar stärker."<span class="who">Kritiker, Runde 1 — Score 3</span></div>
+      <p>Danach: echte Dunkelheit (0.88–0.97, pro Seed divergent), ein Nacht-Lichtbudget von drei dominanten Lichtern neben dem Spieler, Dämmerung als eigener Akt, seed-gebundene Hell-/Dunkelzonen am Tag, drei Nebelschichten mit Bänken — und in Runde 4 ein Horizont mit einem großen, unerreichbaren Ding pro Welt: Bergrücken in VELT, Monolith-Kolosse in ORUN, davor und dahinter ferne Leucht-Cluster in zwei Distanzstufen.</p>
+    </div>
+
+    <div class="area">
+      <h3>Weltregeln &amp; Gefahr als Silhouette</h3>
+      <div class="score">4 → 5 → 7 → 7.5 + Lead-Politur</div>
+      <div class="quote">„Der Jäger ist ein unsichtbarer Arcade-Charger statt einer Reaper-Silhouette."<span class="who">Kritiker, Runde 1 — Score 4</span></div>
+      <p>Danach: ein gegliederter Sechs-Segment-Körper auf Positions-Trail, der sein Opfer erst minutenlang beschattet; Wächter, die einen Territorial-Ring um den Schrein patrouillieren, sodass die ferne Silhouette im Nebel schon am Spawn lesbar ist; Gefahr-Flora, die isoliert wächst (der leere Ring um jede Gefahr ist selbst das Telegraph); Zwillings-Arten, die das Nacht-Umkehr-Gesetz sichtbar machen.</p>
+    </div>
+
+    <div class="area">
+      <h3>Bewegung &amp; Kamera</h3>
+      <div class="score">5 → 7 → 8 ✦</div>
+      <div class="quote">„Vollgas in 0,2 Sekunden und Totalstopp in 0,15 — das macht aus dem Wanderer ein Arcade-Sprite."<span class="who">Kritiker, Runde 1 — Score 5</span></div>
+      <p>Danach: asymptotische Beschleunigung, Ausgleiten statt Stopp, eine Kamera, die mit dem Fokus atmet (Stillstehen atmet tiefer und langsamer), Fußfall, Körper-Bob und Schritt-Klang auf einer gemeinsamen Uhr — kein einziger Sprungpfad mehr im System.</p>
+    </div>
+
+    <div class="area">
+      <h3>Klang der Leere</h3>
+      <div class="score">4 → 6 → 8 ✦</div>
+      <div class="quote">„Das Klangbett ist statisch und atmet nie — die Welt hat Dauerton statt Gewicht."<span class="who">Kritiker, Runde 1 — Score 4</span></div>
+      <p>Danach: Böen und Drone-Schwell auf Minuten-Perioden, ein Sub-Drone, der nachts aufzieht, während der Tiefpass sich schließt; Stimmführung, die über Minuten durch die Seed-Skala gleitet; Entdeckung und Monolith von echter Stille gerahmt; jedes Ereignis der Welt-Tonalität entnommen.</p>
+    </div>
+
+    <div class="area">
+      <h3>Erkenntnis-Moment</h3>
+      <div class="score">4 → 6 → 8 ✦</div>
+      <div class="quote">„Die Vermutung verrät das Gesetz schon wörtlich — nichts wird sichtbar verdient."<span class="who">Kritiker, Runde 1 — Score 4</span></div>
+      <p>Danach: Vermutungen enden offen („Das Lythuish …?"), das Verb erscheint erst im Moment der Kristallisation — Stille, dann das Motiv, dann der Tinten-Reveal mit Gold-Hierarchie. Das Journal ist warmes, opakes Papier mit Glyphen-Handschrift, das den Blick besitzt, statt in der Ecke zu hängen.</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Galerie</p>
+    <h2>Zwei Seeds, zwei Naturen</h2>
+    <div class="gallery">
+      <figure><img src="docs/shots/velt-day.jpg" alt="VELT bei Tag: warme Umbra-Töne, Bergrücken am Horizont, Wächter-Silhouette am Boden."><figcaption>VELT, Tag — Bergrücken hinter Dunst, eine Wächter-Silhouette zieht ihren Ring.</figcaption></figure>
+      <figure><img src="docs/shots/orun-day.jpg" alt="ORUN bei Tag: kühlere Palette, Monolith-Kolosse im Nebel."><figcaption>ORUN, Tag — dieselbe Engine, andere Naturgesetze, andere Kolosse.</figcaption></figure>
+      <figure><img src="docs/shots/velt-dusk.jpg" alt="VELT in der Dämmerung: warme Tönung, ferne Leucht-Cluster hinter Nebelschichten."><figcaption>VELT, Dämmerung — ein eigener Akt zwischen Tag und Nacht.</figcaption></figure>
+      <figure><img src="docs/shots/journal.jpg" alt="Das Feldjournal: warmes Papier mit Glyphen, ein kristallisiertes Gesetz in Gold."><figcaption>Das Feldjournal — „Das Lythuish brennt." Zweimal beobachtet, einmal verstanden.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Der Loop</p>
+    <h2>Builder bauen, Kritiker urteilen — nie dieselbe Person</h2>
+    <p>Jeder Teilbereich durchlief Paare aus Builder und Kritiker mit frischem Kontext. Der Kritiker sah nur das echte Ergebnis und die Bar, benannte die eine größte Lücke und schickte den Bereich zurück. Kein Bereich wurde für fertig erklärt, solange ein frischer Juror die Bar verfehlt sah.</p>
+    <div class="stats">
+      <div class="stat"><div class="n">4</div><div class="l">Runden</div></div>
+      <div class="stat"><div class="n">39</div><div class="l">Subagenten</div></div>
+      <div class="stat"><div class="n">695</div><div class="l">Werkzeug-Läufe</div></div>
+      <div class="stat"><div class="n">2,3&thinsp;M</div><div class="l">Agent-Tokens</div></div>
+      <div class="stat"><div class="n">3 / 5</div><div class="l">Bereiche auf Bar-Niveau 8</div></div>
+    </div>
+    <div class="how">
+      <p><strong>Selbst spielen:</strong></p>
+      <p><code>git clone -b claude/game-design-gauntlet-loop-xqqtv7 https://github.com/Lordbabo069/Lordbabo069.git</code></p>
+      <p><code>cd Lordbabo069 &amp;&amp; python3 -m http.server 8000 --directory game</code> → <code>http://localhost:8000</code></p>
+      <p>W&thinsp;A&thinsp;S&thinsp;D bewegen · E berühren · TAB Journal · Stillstehen weitet die Wahrnehmung. Jede URL mit <code>?seed=DEINWORT</code> ist eine eigene Welt mit eigenen Gesetzen.</p>
+    </div>
+  </section>
+
+  <footer>
+    Der Loop kennt kein Rundenlimit. Zwei Bereiche stehen bei 7–7.5 mit chirurgisch benannten Restlücken — ein Wort genügt, und die nächste Runde läuft.
+  </footer>
+</main>
